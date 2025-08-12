@@ -2,14 +2,18 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 )
 
+const FILE_NAME = "tasks.json"
+
 type Task struct {
-	name        string
-	description string
-	completed   bool
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Completed   bool   `json:"completed"`
 }
 
 type TasksList struct {
@@ -23,7 +27,7 @@ func (l *TasksList) addTask(t Task) {
 
 // complete task
 func (l *TasksList) completeTask(index int) {
-	l.tasks[index].completed = true
+	l.tasks[index].Completed = true
 }
 
 // update
@@ -47,15 +51,68 @@ func (l *TasksList) listAll() {
 	fmt.Println("=======================================")
 
 	for i, t := range l.tasks {
-		fmt.Printf("%d. %s - %s - completado: %t\n", i+1, t.name, t.description, t.completed)
+		fmt.Printf("%d. %s - %s - completado: %t\n", i+1, t.Name, t.Description, t.Completed)
 	}
 
 	fmt.Println("=======================================")
 }
 
+// load tasks from json file
+func (l *TasksList) loadFile() error {
+	file, err := os.Open(FILE_NAME)
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+
+	err = decoder.Decode(&l.tasks)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// save / refresh tasks list in json file
+func (l *TasksList) saveInFile() error {
+	if len(l.tasks) == 0 {
+		fmt.Print("Lista vacia. No hay registros que guardar")
+	}
+
+	file, err := os.Create(FILE_NAME)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+
+	err = encoder.Encode(l.tasks)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Guardado exitoso.")
+
+	return nil
+}
+
 func main() {
 	list := TasksList{}
-	reader := bufio.NewReader(os.Stdin) //Para leer varios caracteres sin tantas limitaciones como fmt.
+	reader := bufio.NewReader(os.Stdin) //To read many characters without limitations as fmt.
+
+	err := list.loadFile()
+	if err != nil {
+		log.Panic(err)
+	}
 
 	for {
 		var option int
@@ -65,20 +122,26 @@ func main() {
 			"2. Marcar tarea como completada\n",
 			"3. Editar tarea\n",
 			"4. Eliminar tarea\n",
-			"5. listar tareas\n",
-			"6. Salir")
+			"5. Listar tareas\n",
+			"6. Guardar / actualizar lista de tareas en archivo\n",
+			"7. Salir")
 
 		fmt.Print("Ingrese la opción: ")
-		fmt.Scanln(&option)
+
+		_, err := fmt.Scanln(&option)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
 		switch option {
 		case 1:
 			var t Task
 
 			fmt.Print("Ingrese el nombre de la tarea: ")
-			t.name, _ = reader.ReadString('\n')
+			t.Name, _ = reader.ReadString('\n')
 			fmt.Print("Ingrese la descripcion de la tarea: ")
-			t.description, _ = reader.ReadString('\n')
+			t.Description, _ = reader.ReadString('\n')
 
 			list.addTask(t)
 
@@ -102,9 +165,9 @@ func main() {
 			fmt.Scanln(&index)
 
 			fmt.Print("Ingrese el nombre de la tarea: ")
-			t.name, _ = reader.ReadString('\n')
+			t.Name, _ = reader.ReadString('\n')
 			fmt.Print("Ingrese la descripcion de la tarea: ")
-			t.description, _ = reader.ReadString('\n')
+			t.Description, _ = reader.ReadString('\n')
 
 			list.updateTask(index-1, t)
 
@@ -121,6 +184,11 @@ func main() {
 		case 5:
 			list.listAll()
 		case 6:
+			err := list.saveInFile()
+			if err != nil {
+				fmt.Println("Hubo un error, intentelo nuevamente: ", err)
+			}
+		case 7:
 			fmt.Println("Saliendo...")
 			return
 		default:
